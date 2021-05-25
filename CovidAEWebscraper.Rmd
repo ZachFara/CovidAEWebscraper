@@ -1,0 +1,99 @@
+---
+title: "Data Manipulation"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##Librarys##
+
+```{r}
+library(qdap)
+library(tidyverse)
+library(dplyr)
+library(tidytext)
+library(quanteda)
+library(topicmodels)
+library(wordcloud)
+library(textstem)
+```
+
+##To do
+#Gender Identification
+#Vaccine Type Identification
+#Sentiment Analysis
+#POS Tagging
+#Use Reddit Data
+
+##Twitter Data
+
+##Data Cleaning
+
+```{r}
+data <- select(twitter_data, c(screen_name,text,user_id))
+## take columns we need
+data <- mutate(data, tweet_num = row_number())
+## create variable twee_num too keep track of the seperate tweets
+data <- unnest_tokens(data,text,text)
+## converts the data from sentences too words which makes it easier too analyze
+data$text <- tolower(data$text)
+#convert too lower case
+##Removing stopwords##
+try(
+stop_words <- stop_words %>%
+  rename(text = word),silent = TRUE)
+data <- anti_join(data,stop_words, by = "text")
+
+sample <- slice_head(data, n = 1000)
+```
+
+
+
+##Lemmatization, abreviation resolution and POS Tagging
+
+
+```{r}
+sample <- slice_head(data, n = 1000)
+sample$text <- replace_abbreviation(sample$text)
+lemma <- lemmatize_strings(sample$text)
+sample <- sample %>% add_column(stem = lemma, .after = "text")
+```
+
+
+##LDA Topic Modeling
+
+Using Quanteda and topicmodels we will generate a dtm directly from the twitter data
+```{r}
+#Declare words too remove
+stwords <- stopwords("english")
+stwords <- append(stwords, c("#covidvaccine","#covid19","#coronavirus","#covid","#covidー19","#vaccine","vaccine","vaccinated","covid-19","#covidvaccination","#vaccination","#covid_19","#covid19vaccine","#corona"))
+
+
+dfm <- twitter_data$text%>%
+  corpus()%>%
+  corpus_reshape(to = "documents")%>%
+  dfm(remove_punct = T,remove = stwords)%>%
+  dfm_trim(min_termfreq = 10)
+
+
+dtm <- convert(dfm, to = "topicmodels")
+set.seed(1)
+lda_model <- LDA(dtm, method = "Gibbs", k = 10, control = list(alpha = .1))
+
+terms(lda_model, 5)
+```
+Generate the most important topic words
+```{r}
+topic <- 6
+words <- posterior(lda_model)$terms[topic, ]
+topwords <- head(sort(words, decreasing = T), n=50)
+head(topwords)
+```
+```{r}
+wordcloud(names(topwords), topwords)
+```
+
+
+Citations: https://github.com/ccs-amsterdam/r-course-material/blob/master/tutorials/r_text_lda.md
